@@ -5,6 +5,7 @@
 
 #include <validation.h>
 
+#include <script/standard.h>
 #include <arith_uint256.h>
 #include <chain.h>
 #include <chainparams.h>
@@ -640,7 +641,7 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
                 // insecure.
                 bool fReplacementOptOut = true;
 
-                // Litecoin: Only support BIP125 RBF when -mempoolreplacement arg is set
+                // Xarza: Only support BIP125 RBF when -mempoolreplacement arg is set
                 if (gArgs.GetArg("-mempoolreplacement", DEFAULT_ENABLE_REPLACEMENT)) {
                     for (const CTxIn &_txin : ptxConflicting->vin)
                     {
@@ -1265,15 +1266,24 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t>& block, const CBlockIndex* pindex
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
-    // Force block reward to zero when right shift is undefined.
-    if (halvings >= 64)
-        return 0;
+    // Emisión inicial: 7.45 XRZ
+    double subsidy = 7.45;
 
-    CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
-    nSubsidy >>= halvings;
-    return nSubsidy;
+    // Calculamos cuántos periodos de "año" han pasado.
+    // El intervalo nSubsidyHalvingInterval lo definimos en 2,102,400 bloques.
+    int years = nHeight / consensusParams.nSubsidyHalvingInterval;
+
+    // Límite de seguridad: Si pasan 100 años, la emisión se detiene.
+    if (years >= 100) return 0;
+
+    // Aplicamos la reducción del 10% (multiplicar por 0.9) por cada año transcurrido.
+    // Esto crea una curva de emisión mucho más suave que el halving de Bitcoin.
+    for (int i = 0; i < years; i++) {
+        subsidy *= 0.9;
+    }
+
+    // Convertimos el resultado a CAmount (que maneja 8 decimales de precisión).
+    return (CAmount)(subsidy * COIN);
 }
 
 CoinsViews::CoinsViews(
@@ -2263,11 +2273,47 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     int64_t nTime3 = GetTimeMicros(); nTimeConnect += nTime3 - nTime2;
     LogPrint(BCLog::BENCH, "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs (%.2fms/blk)]\n", (unsigned)block.vtx.size(), MILLI * (nTime3 - nTime2), MILLI * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : MILLI * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * MICRO, nTimeConnect * MILLI / nBlocksTotal);
 
-    CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
-    if (block.vtx[0]->GetValueOut() > blockReward) {
-        LogPrintf("ERROR: ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)\n", block.vtx[0]->GetValueOut(), blockReward);
-        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount");
+      // --- REGLAS ECONÓMICAS DE XARZA-PRIME ---
+    // =========================================================================
+    
+    CAmount nSubsidy = GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
+    CAmount nDevFee = nSubsidy / 10; 
+    
+    // IMPORTANTE: El límite legal es SOLO el Subsidy.
+    // Al NO sumar nFees, si el minero intenta cobrarlas, el bloque será rechazado.
+    CAmount blockRewardLimit = nSubsidy;
+
+    if (pindex->nHeight > 10) {
+        // Dirección de Tesorería de Pablo (xrz1qslsddk8ga4ttkcfar5xuu9azyck2r4x0x4mwgz)
+        CScript devScript = CScript() << OP_0 << ParseHex("0b18fe3e24e8a160b609ac0edfb93a80237b4825");
+        
+        bool fDevFeePaid = false;
+        for (const auto& txout : block.vtx[0]->vout) {
+            if (txout.scriptPubKey == devScript && txout.nValue >= nDevFee) {
+                fDevFeePaid = true;
+                break;
+            }
+        }
+
+        if (!fDevFeePaid) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-xarza-devfee-missing", 
+                "Falta el pago del 10% a la tesorería.");
+        }
     }
+
+    // Verificación de Quema de Comisiones:
+    // Si el valor total de la coinbase (vtx[0]) es mayor que el subsidio, 
+    // significa que el minero no quemó las fees.
+    if (block.vtx[0]->GetValueOut() > blockRewardLimit) {
+        LogPrintf("XARZA-ERROR: Coinbase %d > Límite %d. Violación de quema.\n", 
+            block.vtx[0]->GetValueOut(), blockRewardLimit);
+        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-burn-violation",
+            "El minero debe quemar las comisiones.");
+    }
+
+    // =========================================================================
+    // --- FIN DE REGLAS XARZA-PRIME ---
+    // =========================================================================
 
     if (!control.Wait()) {
         LogPrintf("ERROR: %s: CheckQueue failed\n", __func__);

@@ -50,7 +50,7 @@ struct Coin : public Traits::ISerializable {
     // May be empty for watch-only wallets.
     boost::optional<BlindingFactor> blind;
 
-    // The output amount in litoshis.
+    // The output amount in xarzashis.
     // Typically positive, but could be 0 in the future when we start using decoys to improve privacy.
     CAmount amount;
 

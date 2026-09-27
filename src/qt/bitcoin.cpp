@@ -8,7 +8,7 @@
 
 #include <qt/bitcoin.h>
 #include <qt/bitcoingui.h>
-
+#include <QFile>
 #include <chainparams.h>
 #include <qt/clientmodel.h>
 #include <qt/guiconstants.h>
@@ -194,7 +194,7 @@ void BitcoinCore::shutdown()
 }
 
 static int qt_argc = 1;
-static const char* qt_argv = "litecoin-qt";
+static const char* qt_argv = "xarza-qt";
 
 BitcoinApplication::BitcoinApplication():
     QApplication(qt_argc, const_cast<char **>(&qt_argv)),
@@ -467,7 +467,11 @@ int GuiMain(int argc, char* argv[])
 #endif
 
     BitcoinApplication app;
-
+// --- CARGA DE ESTILO PERSONALIZADO XARZA ---
+    QFile stylesheet(":xarza-style");
+    if (stylesheet.open(QFile::ReadOnly)) {
+        app.setStyleSheet(stylesheet.readAll());
+    }
     /// 2. Parse command-line options. We do this after qt in order to show an error if there are problems parsing these
     // Command-line options take precedence:
     SetupServerArgs(node_context);

@@ -1,0 +1,15 @@
+QWidget {
+    background-color: #0f0f0f;
+    color: #ffffff;
+    font-family: "Segoe UI", sans-serif;
+}
+QPushButton {
+    background-color: #e20074;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
+    font-weight: bold;
+}
+QMenuBar, QMenu {
+    background-color: #1a1a1a;
+}

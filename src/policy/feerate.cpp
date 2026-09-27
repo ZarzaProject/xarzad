@@ -59,7 +59,7 @@ CAmount CFeeRate::GetTotalFee(size_t nBytes, uint64_t mweb_weight) const
 
 bool CFeeRate::MeetsFeePerK(const CAmount& min_fee_per_k) const
 {
-    // (mweb_weight * BASE_MWEB_FEE) litoshis are required as fee for MWEB transactions.
+    // (mweb_weight * BASE_MWEB_FEE) xarzashis are required as fee for MWEB transactions.
     // Anything beyond that can be used to calculate nSatoshisPerK.
     CAmount mweb_fee = CAmount(m_weight) * BASE_MWEB_FEE;
     if (m_weight > 0 && m_nFeePaid < mweb_fee) {

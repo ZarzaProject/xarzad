@@ -149,3 +149,8 @@ db4/
 osx_volname
 dist/
 *.background.tiff
+src/qt/test/test_xarza-qt
+src/test/test_xarza
+xarza_env/
+*.o
+*.a
